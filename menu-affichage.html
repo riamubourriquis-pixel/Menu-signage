@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Menu du jour</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Lora:wght@400;600&family=Source+Sans+3:wght@300;400;600&display=swap');
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #FFFDF7; --card: #FFFFFF; --border: #E8E0CC;
+    --text: #2C2416; --muted: #8C7B5E; --accent: #7B4F2E; --accent2: #C8A96E;
+    --serif: 'Lora', Georgia, serif; --sans: 'Source Sans 3', Arial, sans-serif;
+  }
+  html, body { width: 100%; height: 100%; background: var(--bg); color: var(--text); font-family: var(--sans); overflow: hidden; }
+  #page { width: 100vw; height: 100vh; display: flex; flex-direction: column; padding: 3vh 4vw; }
+  #header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 3vh; padding-bottom: 2vh; border-bottom: 2px solid var(--accent2); }
+  #titre-bloc h1 { font-family: var(--serif); font-size: clamp(2rem,5vw,3.8rem); font-weight: 600; color: var(--accent); line-height: 1.1; }
+  #titre-bloc p { font-size: clamp(1rem,2.2vw,1.6rem); color: var(--muted); margin-top: 0.3em; font-weight: 300; text-transform: capitalize; }
+  #clock { font-size: clamp(2rem,5vw,3.8rem); font-weight: 600; color: var(--text); font-family: var(--serif); line-height: 1; text-align: right; }
+  #date-display { font-size: clamp(0.9rem,1.8vw,1.3rem); color: var(--muted); margin-top: 0.3em; text-align: right; }
+  #repas-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 2vw; flex: 1; }
+  .repas-card { background: var(--card); border: 1.5px solid var(--border); border-radius: 16px; display: flex; flex-direction: column; overflow: hidden; }
+  .repas-header { padding: 1.2vh 1.5vw; display: flex; align-items: center; gap: 0.6em; border-bottom: 1.5px solid var(--border); }
+  .repas-icon { font-size: clamp(1.4rem,3vw,2.2rem); line-height: 1; }
+  .repas-titre { font-family: var(--serif); font-size: clamp(1.1rem,2.5vw,1.9rem); font-weight: 600; color: var(--accent); }
+  .repas-heure { margin-left: auto; font-size: clamp(0.8rem,1.5vw,1.1rem); color: var(--muted); font-weight: 300; white-space: nowrap; }
+  .repas-body { flex: 1; padding: 1.5vh 1.5vw; display: flex; flex-direction: column; gap: 1.2vh; }
+  .plat-ligne { display: flex; flex-direction: column; gap: 0.2em; }
+  .plat-categorie { font-size: clamp(0.7rem,1.2vw,0.95rem); text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent2); font-weight: 600; }
+  .plat-nom { font-size: clamp(1rem,2vw,1.5rem); color: var(--text); font-weight: 400; line-height: 1.3; }
+  .plat-nom.vide { color: var(--muted); font-style: italic; }
+  .separateur { height: 1px; background: var(--border); margin: 0.3vh 0; }
+  #footer { text-align: center; padding-top: 1.5vh; font-size: clamp(0.7rem,1.2vw,0.95rem); color: var(--muted); border-top: 1px solid var(--border); margin-top: 1.5vh; }
+</style>
+</head>
+<body>
+<div id="page">
+  <div id="header">
+    <div id="titre-bloc">
+      <h1>Menu du jour</h1>
+      <p id="date-display"></p>
+    </div>
+    <div>
+      <div id="clock"></div>
+    </div>
+  </div>
+  <div id="repas-grid">
+    <div class="repas-card">
+      <div class="repas-header"><span class="repas-icon">☕</span><span class="repas-titre">Petit-déjeuner</span><span class="repas-heure">8h00</span></div>
+      <div class="repas-body" id="body-matin"></div>
+    </div>
+    <div class="repas-card">
+      <div class="repas-header"><span class="repas-icon">🍽️</span><span class="repas-titre">Déjeuner</span><span class="repas-heure">12h00</span></div>
+      <div class="repas-body" id="body-midi"></div>
+    </div>
+    <div class="repas-card">
+      <div class="repas-header"><span class="repas-icon">🌙</span><span class="repas-titre">Dîner</span><span class="repas-heure">19h00</span></div>
+      <div class="repas-body" id="body-soir"></div>
+    </div>
+  </div>
+  <div id="footer">Bon appétit à tous les résidents ✦ Menu susceptible d'être modifié</div>
+</div>
+<script>
+const BIN_ID = '6a19515f21f9ee59d298c3fc';
+const API_KEY = '$2a$10$UZA.wKkWWw.sEw4bBhePZuo417WrS50iTzIHsCuo3izFmI1/y1cgC';
+
+const REPAS_CONFIG = {
+  matin: ['boisson','pain','accompagnement'],
+  midi:  ['entree','plat','garniture','fromage','dessert'],
+  soir:  ['entree','plat','garniture','dessert']
+};
+const LABELS = {
+  boisson:'Boisson', pain:'Pain / Viennoiserie', accompagnement:'Accompagnement',
+  entree:'Entrée', plat:'Plat principal', garniture:'Garniture',
+  fromage:'Fromage', dessert:'Dessert'
+};
+
+function getTodayKey() {
+  return new Date().toISOString().slice(0,10);
+}
+
+async function fetchMenu() {
+  try {
+    const res = await fetch('https://api.jsonbin.io/v3/b/'+BIN_ID+'/latest', {
+      headers: { 'X-Master-Key': API_KEY }
+    });
+    const data = await res.json();
+    return data.record || {};
+  } catch(e) { return {}; }
+}
+
+function renderRepas(repasId, menu) {
+  const body = document.getElementById('body-'+repasId);
+  body.innerHTML = '';
+  const today = getTodayKey();
+  const data = menu[today] && menu[today][repasId];
+  REPAS_CONFIG[repasId].forEach((key, i) => {
+    if (i > 0) { const sep = document.createElement('div'); sep.className = 'separateur'; body.appendChild(sep); }
+    const val = data && data[key];
+    const div = document.createElement('div');
+    div.className = 'plat-ligne';
+    div.innerHTML = `<span class="plat-categorie">${LABELS[key]}</span><span class="plat-nom ${val?'':'vide'}">${val||'Non renseigné'}</span>`;
+    body.appendChild(div);
+  });
+}
+
+async function refresh() {
+  const menu = await fetchMenu();
+  renderRepas('matin', menu);
+  renderRepas('midi', menu);
+  renderRepas('soir', menu);
+}
+
+function updateClock() {
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2,'0');
+  const mm = String(now.getMinutes()).padStart(2,'0');
+  document.getElementById('clock').textContent = hh+':'+mm;
+  const jours = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
+  const mois = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+  document.getElementById('date-display').textContent =
+    jours[now.getDay()]+' '+now.getDate()+' '+mois[now.getMonth()]+' '+now.getFullYear();
+}
+
+updateClock();
+setInterval(updateClock, 10000);
+refresh();
+setInterval(refresh, 60000);
+</script>
+</body>
+</html>
